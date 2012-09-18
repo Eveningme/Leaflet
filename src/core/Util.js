@@ -3,12 +3,12 @@
  */
 
 L.Util = {
-	extend: function (/*Object*/ dest) /*-> Object*/ {	// merge src properties into dest
-		var sources = Array.prototype.slice.call(arguments, 1);
+	extend: function (/*Object*/ dest) /*-> Object*/ {	// merge src properties into dest 合并src属性到dest
+		var sources = Array.prototype.slice.call(arguments, 1); //获取从第二项开始的数组
 		for (var j = 0, len = sources.length, src; j < len; j++) {
 			src = sources[j] || {};
 			for (var i in src) {
-				if (src.hasOwnProperty(i)) {
+				if (src.hasOwnProperty(i)) { //判断src含有名称为i的属性
 					dest[i] = src[i];
 				}
 			}
