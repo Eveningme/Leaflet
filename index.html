@@ -1,0 +1,151 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Leaflet Demo</title>
+<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.4/leaflet.css" />
+<script src="debug/leaflet-include.js"></script>
+<style>
+	#map { height: 440px; }
+	#search { padding: 5px; }
+</style>
+</head>
+
+<body>
+	<div id="map"></div>
+    <div id="search">
+    	<span>起点：<input id="start" type="text" /></span>
+        <span>终点：<input id="end" type="text" /></span>
+        <span><button onClick="Search()">搜索</button></span>
+    </div>
+    <script type="text/javascript">
+		var cloudmadeUrl = 'http://emap2.mapabc.com/mapabc/maptile?x={x}&y={y}&z={z}',
+			cloudmadeAttribution = 'GitHub By <a href="http://eveningme.com">Eveningme</a>',
+			cloudmade = new L.TileLayer(cloudmadeUrl, {minZoom: 3, maxZoom: 18, attribution: cloudmadeAttribution}),
+			latlng = new L.LatLng(39.923581, 116.397771);
+			//latlng = new L.LatLng(36.710, 119.117);
+			
+		var map = new L.Map('map', {center: latlng, zoom: 13, layers: [cloudmade]});
+		
+		function onMapClick(e) {
+			var marker = L.marker(e.latlng).addTo(map);
+			marker.bindPopup(marker.getLatLng().toString()).openPopup();
+		}
+		
+		//map.on('click', onMapClick);
+		
+		L.tileLayer('http://tm.mapabc.com/trafficengine/mapabc/traffictile?v=1.0&t=1&zoom=4&x={x}&y={y}',{opacity: 0.7}).addTo(map);
+	</script>
+    <script type="text/javascript">
+		function Search(){
+/*			var start = document.getElementById("start").value,
+				end = document.getElementById("end").value;
+				xy = {};
+				xy.sx = 5,xy.sy = 5;
+			var smarker = function(data){
+				this.sx = data.list[0].x;
+				this.sy = data.list[0].y;
+				//console.log(this.sx,this.sy);
+				
+				//return data.list[0].x+','+data.list[0].y;
+			}
+			
+			var emarker = function(data){
+				//this.ex = data.list[0].x;
+				//this.ey = data.list[0].y;
+				return data.list[0].x+','+data.list[0].y;
+			}
+			Geo(start,smarker);
+			Geo(end,emarker);
+			*/
+			var rlist = function(data){
+				var list = data.list;
+				for(var i in list){
+					console.log(list[i]);
+					var xys = list[i].coor;
+					var coor = xys.split(';');
+					//console.log(coor);
+					latlngs = Array();
+					for(var j in coor){
+						var xy = coor[j].split(',');
+						latlngs.push(new L.LatLng(xy[1], xy[0]));
+						
+						if(j == 1){
+							console.log(list[i].textInfo);
+							var marker = L.marker(new L.LatLng(xy[1], xy[0]),{title: list[i].textInfo}).addTo(map);
+							marker.bindPopup(list[i].textInfo).openPopup();
+						}
+						//console.log(xy);
+					}
+					
+					var path = new L.Polyline(latlngs, {color: 'black'});
+					map.addLayer(path);
+				}
+			}
+			
+			xys = '116.400278,39.898776;116.313539,39.950226';
+			Route(xys,rlist);
+		}
+		
+		function Ajax(src,func){
+			MMap = {};
+			MMap["MAjaxResult"] = {};
+			MMap.MAjaxResult[14] = {};
+			var __script = document.getElementById("eveningme");
+			if(__script){document.getElementsByTagName("head")[0].removeChild(__script);}
+			__script = document.createElement("script");
+			__script.id = "eveningme";
+			__script.type = "text/javascript";
+			__script.src = src;
+			document.getElementsByTagName("head")[0].appendChild(__script);
+			
+			__script.onload = function (){
+				if(MMap.MAjaxResult[14]){
+					var data = MMap["MAjaxResult"][14];
+					if(func){
+						func(data);
+					}
+					//document.getElementsByTagName("head")[0].removeChild(document.getElementById("eveningme"));
+					//MMap["MAjaxResult"][14] = null;
+					//delete MMap["MAjaxResult"][14];
+				}
+			};
+		}
+		
+		function Route(xys,func){
+			var url = 'http://apis.mapabc.com/route/simple',obj = {
+				"resType": "json",
+				"encode": "utf-8",//字符集编码
+				"routeType":0,//计算规则
+				"per":10,//抽稀参数
+				"sid":8000,
+				"retvalue":1,
+				"xys":xys,
+				"key":"35b0318454dac52828366c2ca43dbd60916a36ae5735d4e136a26c91b00f9c0ffd3ed02ccd5c5e57",
+				"rid":14
+			}
+			
+			Ajax(url+L.Util.getParamString(obj),func);
+		}
+		
+		function Geo(string,func){
+			var url = 'http://apis.mapabc.com/geocode/simple',obj = {
+				"resType": "json",
+				"encode": "utf-8",//字符集编码
+				"range":3000,//查询范围
+				"roadnum":10,//路线记录数
+				"crossnum":3,//道路交叉口数
+				"poinum":10,//地理点数
+				"sid":7000,
+				"retvalue":1,
+				"address":encodeURI(string),
+				"key":"35b0318454dac52828366c2ca43dbd60916a36ae5735d4e136a26c91b00f9c0ffd3ed02ccd5c5e57",
+				"rid":14
+			}
+			
+			Ajax(url+L.Util.getParamString(obj),func);
+			
+		}
+	</script>
+</body>
+</html>
