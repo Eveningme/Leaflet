@@ -11,11 +11,11 @@ L.DomUtil = {
 
 		var value = el.style[style];
 
-		if (!value && el.currentStyle) {
+		if (!value && el.currentStyle) { //如果value没有获取到并且对象的currentStyle能获取到【特指IE浏览器】
 			value = el.currentStyle[style];
 		}
 
-		if (!value || value === 'auto') {
+		if (!value || value === 'auto') { //非IE支持的获取
 			var css = document.defaultView.getComputedStyle(el, null);
 			value = css ? css[style] : null;
 		}
@@ -23,7 +23,7 @@ L.DomUtil = {
 		return value === 'auto' ? null : value;
 	},
 
-	getViewportOffset: function (element) {
+	getViewportOffset: function (element) { //获取视野偏移量
 
 		var top = 0,
 			left = 0,

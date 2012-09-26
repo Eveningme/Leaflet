@@ -13,10 +13,11 @@ L.Mixin.Events = {
 			type, i, len;
 		
 		// Types can be a map of types/handlers
-		if (typeof types === 'object') {
+		// Types可以是一个地图的一个类型或者是处理程序
+		if (typeof types === 'object') { //假如是一个object，循环object
 			for (type in types) {
-				if (types.hasOwnProperty(type)) {
-					this.addEventListener(type, types[type], fn);
+				if (types.hasOwnProperty(type)) { //判断types是否含有名称为type的属性
+					this.addEventListener(type, types[type], fn); //然后再次执行addEventListener
 				}
 			}
 			
@@ -58,7 +59,7 @@ L.Mixin.Events = {
 
 		for (i = 0, len = types.length; i < len; i++) {
 
-			if (this.hasEventListeners(types[i])) {
+			if (this.hasEventListeners(types[i])) { //判断this是否添加了types[i]这个事件
 				listeners = events[types[i]];
 				
 				for (j = listeners.length - 1; j >= 0; j--) {

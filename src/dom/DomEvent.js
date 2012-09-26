@@ -25,7 +25,7 @@ L.DomEvent = {
 				obj.addEventListener('DOMMouseScroll', handler, false);
 				obj.addEventListener(type, handler, false);
 
-			} else if ((type === 'mouseenter') || (type === 'mouseleave')) {
+			} else if ((type === 'mouseenter') || (type === 'mouseleave')) { //mouseenter:鼠标经过元素 || mouseleave:鼠标离开元素
 
 				originalHandler = handler;
 				newType = (type === 'mouseenter' ? 'mouseover' : 'mouseout');
@@ -81,7 +81,7 @@ L.DomEvent = {
 		return this;
 	},
 
-	stopPropagation: function (e) {
+	stopPropagation: function (e) { //阻止冒泡
 
 		if (e.stopPropagation) {
 			e.stopPropagation();
@@ -91,7 +91,7 @@ L.DomEvent = {
 		return this;
 	},
 
-	disableClickPropagation: function (el) {
+	disableClickPropagation: function (el) { //阻止点击事件穿透
 
 		var stop = L.DomEvent.stopPropagation;
 		
@@ -101,7 +101,7 @@ L.DomEvent = {
 			.addListener(el, 'dblclick', stop);
 	},
 
-	preventDefault: function (e) {
+	preventDefault: function (e) { //阻止浏览器默认事件
 
 		if (e.preventDefault) {
 			e.preventDefault();
@@ -140,6 +140,7 @@ L.DomEvent = {
 	},
 
 	// check if element really left/entered the event target (for mouseenter/mouseleave)
+	// 检查元素是否真的离开或进入事件 目标（针对 鼠标经过事件：mouseenter/鼠标离开事件：mouseleave）
 	_checkMouse: function (el, e) {
 
 		var related = e.relatedTarget;

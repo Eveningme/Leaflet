@@ -5,7 +5,7 @@
 L.Draggable = L.Class.extend({
 	includes: L.Mixin.Events,
 
-	statics: {
+	statics: { //判断是否手持，调用不同事件
 		START: L.Browser.touch ? 'touchstart' : 'mousedown',
 		END: L.Browser.touch ? 'touchend' : 'mouseup',
 		MOVE: L.Browser.touch ? 'touchmove' : 'mousemove',

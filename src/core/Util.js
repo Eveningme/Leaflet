@@ -9,7 +9,7 @@ L.Util = {
 			src = sources[j] || {};
 			for (var i in src) {
 				if (src.hasOwnProperty(i)) { //判断src含有名称为i的属性
-					dest[i] = src[i];
+					dest[i] = src[i]; //添加或覆盖到dest
 				}
 			}
 		}
@@ -31,7 +31,7 @@ L.Util = {
 		};
 	}()),
 
-	limitExecByInterval: function (fn, time, context) {
+	limitExecByInterval: function (fn, time, context) { //限制Interval的执行
 		var lock, execOnUnlock;
 
 		return function wrapperFn() {
@@ -66,7 +66,7 @@ L.Util = {
 		return Math.round(num * pow) / pow;
 	},
 
-	splitWords: function (str) {
+	splitWords: function (str) { //格式化字符串然后按空白符分隔
 		return str.replace(/^\s+|\s+$/g, '').split(/\s+/);
 	},
 
@@ -75,14 +75,14 @@ L.Util = {
 		return obj.options;
 	},
 
-	getParamString: function (obj) {
+	getParamString: function (obj) { //获取参数字符串
 		var params = [];
 		for (var i in obj) {
 			if (obj.hasOwnProperty(i)) {
 				params.push(i + '=' + obj[i]);
 			}
 		}
-		return '?' + params.join('&');
+		return '?' + params.join('&'); //拼凑成get方式的url后面的参数串
 	},
 
 	template: function (str, data) {
