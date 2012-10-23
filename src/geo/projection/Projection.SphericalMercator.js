@@ -1,4 +1,4 @@
-
+//球形墨卡托
 L.Projection.SphericalMercator = {
 	MAX_LATITUDE: 85.0511287798,
 

@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <title>Leaflet Demo</title>
-<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.4/leaflet.css" />
+<link rel="stylesheet" href="dist/leaflet.css" />
+<!--[if lte IE 8]>
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.4/leaflet.ie.css" />
+<![endif]-->
 <script src="debug/leaflet-include.js"></script>
 <style>
-	#map { height: 440px; }
+	#map { height: 500px; }
 	#search { padding: 5px; }
 </style>
 </head>
@@ -17,24 +20,51 @@
     	<span>起点：<input id="start" type="text" /></span>
         <span>终点：<input id="end" type="text" /></span>
         <span><button onClick="Search()">搜索</button></span>
+        <span><button onClick="onMapClick()">onMapClick</button></span>
+        <span><button onClick="demo()">demo</button></span>
+        <span><button onClick="polygon()">polygon</button></span>
+        <span><button onClick="getPanes()">getPanes</button></span>
     </div>
     <script type="text/javascript">
-		var cloudmadeUrl = 'http://emap2.mapabc.com/mapabc/maptile?x={x}&y={y}&z={z}',
-			cloudmadeAttribution = 'GitHub By <a href="http://eveningme.com">Eveningme</a>',
+		//var cloudmadeUrl = 'http://emap2.mapabc.com/mapabc/maptile?x={x}&y={y}&z={z}',
+		//var cloudmadeUrl = 'http://180.96.64.133/mapabc/maptile?x={x}&y={y}&z={z}',
+		//var cloudmadeUrl = 'http://webst04.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+		var cloudmadeUrl = 'http://119.167.194.191/appmaptile?style=6&x={x}&y={y}&z={z}',
+		//var cloudmadeUrl = 'http://mt3.google.cn/vt/lyrs=s@117&hl=zh-CN&gl=cn&src=app&x={x}&y={y}&z={z}&s=Galil',
+			cloudmadeAttribution = 'GitHub By <a href="http://eveningme.com" target="_blank">Eveningme</a>',
+			key = '8c89ffeede964b89936e1213aa8a3292',
 			cloudmade = new L.TileLayer(cloudmadeUrl, {minZoom: 3, maxZoom: 18, attribution: cloudmadeAttribution}),
 			latlng = new L.LatLng(39.923581, 116.397771);
 			//latlng = new L.LatLng(36.710, 119.117);
 			
-		var map = new L.Map('map', {center: latlng, zoom: 13, layers: [cloudmade]});
+		var map = new L.Map('map', {center: latlng, zoom: 14, layers: [cloudmade],/*,maxBounds: new L.LatLngBounds(new L.LatLng(39.78703014, 116.01668275), new L.LatLng(39.91617995, 116.4746753))*/closePopupOnClick: true, markerZoomAnimation: false});
+		//map.locate({setView: true});
 		
 		function onMapClick(e) {
-			var marker = L.marker(e.latlng).addTo(map);
+			var marker = L.marker(new L.LatLng(39.923581, 116.397771)).addTo(map);
 			marker.bindPopup(marker.getLatLng().toString()).openPopup();
 		}
 		
+		function demo(){
+			map.panInsideBounds(new L.LatLngBounds(new L.LatLng(39.78703014, 116.01668275), new L.LatLng(39.91617995, 116.4746753)));
+		}
+		
+		function polygon(){
+			var polygon = L.polygon([
+				[39.78703014, 116.01668275],
+				[39.91617995, 116.01668275],
+				[39.91617995, 116.4746753],
+				[39.78703014, 116.4746753]
+			]).addTo(map);
+		}
+		
+		function getPanes(){
+			map.getPanes();
+		}
 		//map.on('click', onMapClick);
 		
-		L.tileLayer('http://tm.mapabc.com/trafficengine/mapabc/traffictile?v=1.0&t=1&zoom=4&x={x}&y={y}',{opacity: 0.7}).addTo(map);
+		//L.tileLayer('http://tm.mapabc.com/trafficengine/mapabc/traffictile?v=1.0&t=1&zoom=4&x={x}&y={y}',{opacity: 0.7}).addTo(map);
+		L.tileLayer('http://mt3.google.cn/vt/imgtp=png32&lyrs=h@186000000&hl=zh-CN&gl=cn&src=app&x={x}&y={y}&z={z}&s=Galil').addTo(map);
 	</script>
     <script type="text/javascript">
 		function Search(){
@@ -61,25 +91,32 @@
 			var rlist = function(data){
 				var list = data.list;
 				for(var i in list){
-					console.log(list[i]);
 					var xys = list[i].coor;
 					var coor = xys.split(';');
-					//console.log(coor);
 					latlngs = Array();
 					for(var j in coor){
 						var xy = coor[j].split(',');
 						latlngs.push(new L.LatLng(xy[1], xy[0]));
 						
 						if(j == 1){
-							console.log(list[i].textInfo);
+							var greenIcon = L.icon({
+								iconUrl: 'http://leaflet.cloudmade.com/docs/images/leaf-green.png',
+								shadowUrl: 'http://leaflet.cloudmade.com/docs/images/leaf-shadow.png',
+								iconSize:     [38, 95], // size of the icon
+								shadowSize:   [50, 64], // size of the shadow
+								iconAnchor:   [22, 94], // point of the icon which will correspond to marker's location
+								shadowAnchor: [4, 62],  // the same for the shadow
+								popupAnchor:  [-3, -76] // point from which the popup should open relative to the iconAnchor
+							});
+							
 							var marker = L.marker(new L.LatLng(xy[1], xy[0]),{title: list[i].textInfo}).addTo(map);
 							marker.bindPopup(list[i].textInfo).openPopup();
 						}
-						//console.log(xy);
 					}
 					
-					var path = new L.Polyline(latlngs, {color: 'black'});
-					map.addLayer(path);
+					var polyline = new L.Polyline(latlngs, {color: 'purple'}).addTo(map);
+					//var polyline = map.addLayer(path);
+					//map.fitBounds(polyline.getBounds());
 				}
 			}
 			

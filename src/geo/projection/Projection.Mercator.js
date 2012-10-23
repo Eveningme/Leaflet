@@ -1,4 +1,4 @@
-
+//墨卡托
 L.Projection.Mercator = {
 	MAX_LATITUDE: 85.0840591556,
 
