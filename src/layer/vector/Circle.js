@@ -1,22 +1,14 @@
 /*
  * L.Circle is a circle overlay (with a certain radius in meters).
+ * It's an approximation and starts to diverge from a real circle closer to poles (due to projection distortion)
  */
 
-L.Circle = L.Path.extend({
-	initialize: function (latlng, radius, options) {
-		L.Path.prototype.initialize.call(this, options);
+L.Circle = L.CircleMarker.extend({
 
+	initialize: function (latlng, options) {
+		L.setOptions(this, options);
 		this._latlng = L.latLng(latlng);
-		this._mRadius = radius;
-	},
-
-	options: {
-		fill: true
-	},
-
-	setLatLng: function (latlng) {
-		this._latlng = L.latLng(latlng);
-		return this.redraw();
+		this._mRadius = this.options.radius;
 	},
 
 	setRadius: function (radius) {
@@ -24,74 +16,56 @@ L.Circle = L.Path.extend({
 		return this.redraw();
 	},
 
-	projectLatlngs: function () {
-		var lngRadius = this._getLngRadius(),
-			latlng2 = new L.LatLng(this._latlng.lat, this._latlng.lng - lngRadius, true),
-			point2 = this._map.latLngToLayerPoint(latlng2);
-
-		this._point = this._map.latLngToLayerPoint(this._latlng);
-		this._radius = Math.max(Math.round(this._point.x - point2.x), 1);
-	},
-
-	getBounds: function () {
-		var map = this._map,
-			delta = this._radius * Math.cos(Math.PI / 4),
-			point = map.project(this._latlng),
-			swPoint = new L.Point(point.x - delta, point.y + delta),
-			nePoint = new L.Point(point.x + delta, point.y - delta),
-			sw = map.unproject(swPoint),
-			ne = map.unproject(nePoint);
-
-		return new L.LatLngBounds(sw, ne);
-	},
-
-	getLatLng: function () {
-		return this._latlng;
-	},
-
-	getPathString: function () {
-		var p = this._point,
-			r = this._radius;
-
-		if (this._checkIfEmpty()) {
-			return '';
-		}
-
-		if (L.Browser.svg) {
-			return "M" + p.x + "," + (p.y - r) +
-					"A" + r + "," + r + ",0,1,1," +
-					(p.x - 0.1) + "," + (p.y - r) + " z";
-		} else {
-			p._round();
-			r = Math.round(r);
-			return "AL " + p.x + "," + p.y + " " + r + "," + r + " 0," + (65535 * 360);
-		}
-	},
-
 	getRadius: function () {
 		return this._mRadius;
 	},
 
-	_getLngRadius: function () {
-		var equatorLength = 40075017,
-			hLength = equatorLength * Math.cos(L.LatLng.DEG_TO_RAD * this._latlng.lat);
+	getBounds: function () {
+		var half = [this._radius, this._radiusY || this._radius];
 
-		return (this._mRadius / hLength) * 360;
+		return new L.LatLngBounds(
+			this._map.layerPointToLatLng(this._point.subtract(half)),
+			this._map.layerPointToLatLng(this._point.add(half)));
 	},
 
-	_checkIfEmpty: function () {
-		if (!this._map) {
-			return false;
-		}
-		var vp = this._map._pathViewport,
-			r = this._radius,
-			p = this._point;
+	setStyle: L.Path.prototype.setStyle,
 
-		return p.x - r > vp.max.x || p.y - r > vp.max.y ||
-			p.x + r < vp.min.x || p.y + r < vp.min.y;
+	_project: function () {
+
+		var lng = this._latlng.lng,
+		    lat = this._latlng.lat,
+		    map = this._map,
+		    crs = map.options.crs;
+
+		if (crs.distance === L.CRS.Earth.distance) {
+			var d = Math.PI / 180,
+			    latR = (this._mRadius / L.CRS.Earth.R) / d,
+			    top = map.project([lat + latR, lng]),
+			    bottom = map.project([lat - latR, lng]),
+			    p = top.add(bottom).divideBy(2),
+			    lat2 = map.unproject(p).lat,
+			    lngR = Math.acos((Math.cos(latR * d) - Math.sin(lat * d) * Math.sin(lat2 * d)) /
+			            (Math.cos(lat * d) * Math.cos(lat2 * d))) / d;
+
+			this._point = p.subtract(map.getPixelOrigin());
+			this._radius = isNaN(lngR) ? 0 : Math.max(Math.round(p.x - map.project([lat2, lng - lngR]).x), 1);
+			this._radiusY = Math.max(Math.round(p.y - top.y), 1);
+
+		} else {
+			var latlng2 = crs.unproject(crs.project(this._latlng).subtract([this._mRadius, 0]));
+
+			this._point = map.latLngToLayerPoint(this._latlng);
+			this._radius = this._point.x - map.latLngToLayerPoint(latlng2).x;
+		}
+
+		this._updateBounds();
 	}
 });
 
-L.circle = function (latlng, radius, options) {
-	return new L.Circle(latlng, radius, options);
+L.circle = function (latlng, options, legacyOptions) {
+	if (typeof options === 'number') {
+		// Backwards compatibility with 0.7.x factory (latlng, radius, options?)
+		options = L.extend({}, legacyOptions, {radius: options});
+	}
+	return new L.Circle(latlng, options);
 };

@@ -1,3 +1,7 @@
+/*
+ * L.TileLayer.WMS is used for WMS tile layers.
+ */
+
 L.TileLayer.WMS = L.TileLayer.extend({
 
 	defaultWmsParams: {
@@ -10,60 +14,62 @@ L.TileLayer.WMS = L.TileLayer.extend({
 		transparent: false
 	},
 
-	initialize: function (url, options) { // (String, Object)
+	options: {
+		crs: null,
+		uppercase: false
+	},
+
+	initialize: function (url, options) {
 
 		this._url = url;
 
-		var wmsParams = L.Util.extend({}, this.defaultWmsParams);
+		var wmsParams = L.extend({}, this.defaultWmsParams);
 
-		if (options.detectRetina && L.Browser.retina) {
-			wmsParams.width = wmsParams.height = this.options.tileSize * 2;
-		} else {
-			wmsParams.width = wmsParams.height = this.options.tileSize;
-		}
-
+		// all keys that are not TileLayer options go to WMS params
 		for (var i in options) {
-			// all keys that are not TileLayer options go to WMS params
-			if (!this.options.hasOwnProperty(i)) {
+			if (!(i in this.options)) {
 				wmsParams[i] = options[i];
 			}
 		}
 
-		this.wmsParams = wmsParams;
+		options = L.setOptions(this, options);
 
-		L.Util.setOptions(this, options);
+		wmsParams.width = wmsParams.height = options.tileSize * (options.detectRetina && L.Browser.retina ? 2 : 1);
+
+		this.wmsParams = wmsParams;
 	},
 
 	onAdd: function (map) {
 
-		var projectionKey = parseFloat(this.wmsParams.version) >= 1.3 ? 'crs' : 'srs';
-		this.wmsParams[projectionKey] = map.options.crs.code;
+		this._crs = this.options.crs || map.options.crs;
+		this._wmsVersion = parseFloat(this.wmsParams.version);
+
+		var projectionKey = this._wmsVersion >= 1.3 ? 'crs' : 'srs';
+		this.wmsParams[projectionKey] = this._crs.code;
 
 		L.TileLayer.prototype.onAdd.call(this, map);
 	},
 
-	getTileUrl: function (tilePoint, zoom) { // (Point, Number) -> String
+	getTileUrl: function (coords) {
 
-		var map = this._map,
-			crs = map.options.crs,
-			tileSize = this.options.tileSize,
+		var tileBounds = this._tileCoordsToBounds(coords),
+		    nw = this._crs.project(tileBounds.getNorthWest()),
+		    se = this._crs.project(tileBounds.getSouthEast()),
 
-			nwPoint = tilePoint.multiplyBy(tileSize),
-			sePoint = nwPoint.add(new L.Point(tileSize, tileSize)),
+		    bbox = (this._wmsVersion >= 1.3 && this._crs === L.CRS.EPSG4326 ?
+			    [se.y, nw.x, nw.y, se.x] :
+			    [nw.x, se.y, se.x, nw.y]).join(','),
 
-			nw = crs.project(map.unproject(nwPoint, zoom)),
-			se = crs.project(map.unproject(sePoint, zoom)),
+		    url = L.TileLayer.prototype.getTileUrl.call(this, coords);
 
-			bbox = [nw.x, se.y, se.x, nw.y].join(','),
-
-			url = L.Util.template(this._url, {s: this._getSubdomain(tilePoint)});
-
-		return url + L.Util.getParamString(this.wmsParams) + "&bbox=" + bbox;
+		return url +
+			L.Util.getParamString(this.wmsParams, url, this.options.uppercase) +
+			(this.options.uppercase ? '&BBOX=' : '&bbox=') + bbox;
 	},
 
 	setParams: function (params, noRedraw) {
 
-		L.Util.extend(this.wmsParams, params);
+		L.extend(this.wmsParams, params);
 
 		if (!noRedraw) {
 			this.redraw();

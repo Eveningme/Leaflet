@@ -1,75 +1,59 @@
+/*
+ * L.Browser handles different browser and feature detections for internal Leaflet use.
+ */
+
 (function () {
+
 	var ua = navigator.userAgent.toLowerCase(),
-		ie = !!window.ActiveXObject,
-		ie6 = ie && !window.XMLHttpRequest,
-		webkit = ua.indexOf("webkit") !== -1,
-		gecko = ua.indexOf("gecko") !== -1,
-		//Terrible browser detection to work around a safari / iOS / android browser bug. See TileLayer._addTile and debug/hacks/jitter.html
-		chrome = ua.indexOf("chrome") !== -1,
-		opera = window.opera,
-		android = ua.indexOf("android") !== -1,
-		android23 = ua.search("android [23]") !== -1,
-		mobile = typeof orientation !== undefined + '' ? true : false,
-		doc = document.documentElement,
-		ie3d = ie && ('transition' in doc.style),
-		webkit3d = webkit && ('WebKitCSSMatrix' in window) && ('m11' in new window.WebKitCSSMatrix()),
-		gecko3d = gecko && ('MozPerspective' in doc.style),
-		opera3d = opera && ('OTransition' in doc.style);
+	    doc = document.documentElement,
 
-	var touch = !window.L_NO_TOUCH && (function () {
-		var startName = 'ontouchstart';
+	    ie = 'ActiveXObject' in window,
 
-		// WebKit, etc
-		if (startName in doc) {
-			return true;
-		}
+	    webkit    = ua.indexOf('webkit') !== -1,
+	    phantomjs = ua.indexOf('phantom') !== -1,
+	    android23 = ua.search('android [23]') !== -1,
+	    chrome    = ua.indexOf('chrome') !== -1,
+	    gecko     = ua.indexOf('gecko') !== -1  && !webkit && !window.opera && !ie,
 
-		// Firefox/Gecko
-		var div = document.createElement('div'),
-			supported = false;
+	    mobile = typeof orientation !== 'undefined' || ua.indexOf('mobile') !== -1,
+	    msPointer = !window.PointerEvent && window.MSPointerEvent,
+	    pointer = (window.PointerEvent && navigator.pointerEnabled) || msPointer,
 
-		if (!div.setAttribute) {
-			return false;
-		}
-		div.setAttribute(startName, 'return;');
+	    ie3d = ie && ('transition' in doc.style),
+	    webkit3d = ('WebKitCSSMatrix' in window) && ('m11' in new window.WebKitCSSMatrix()) && !android23,
+	    gecko3d = 'MozPerspective' in doc.style,
+	    opera12 = 'OTransition' in doc.style;
 
-		if (typeof div[startName] === 'function') {
-			supported = true;
-		}
-
-		div.removeAttribute(startName);
-		div = null;
-
-		return supported;
-	}());
-
-	var retina = (('devicePixelRatio' in window && window.devicePixelRatio > 1) || ('matchMedia' in window && window.matchMedia("(min-resolution:144dpi)").matches));
+	var touch = !window.L_NO_TOUCH && !phantomjs && (pointer || 'ontouchstart' in window ||
+			(window.DocumentTouch && document instanceof window.DocumentTouch));
 
 	L.Browser = {
-		ua: ua,
 		ie: ie,
-		ie6: ie6,
+		ielt9: ie && !document.addEventListener,
 		webkit: webkit,
 		gecko: gecko,
-		opera: opera,
-		android: android,
+		android: ua.indexOf('android') !== -1,
 		android23: android23,
-
 		chrome: chrome,
+		safari: !chrome && ua.indexOf('safari') !== -1,
 
 		ie3d: ie3d,
 		webkit3d: webkit3d,
 		gecko3d: gecko3d,
-		opera3d: opera3d,
-		any3d: !window.L_DISABLE_3D && (ie3d || webkit3d || gecko3d || opera3d),
+		opera12: opera12,
+		any3d: !window.L_DISABLE_3D && (ie3d || webkit3d || gecko3d) && !opera12 && !phantomjs,
 
 		mobile: mobile,
 		mobileWebkit: mobile && webkit,
 		mobileWebkit3d: mobile && webkit3d,
-		mobileOpera: mobile && opera,
+		mobileOpera: mobile && window.opera,
+		mobileGecko: mobile && gecko,
 
-		touch: touch,
+		touch: !!touch,
+		msPointer: !!msPointer,
+		pointer: !!pointer,
 
-		retina: retina
+		retina: (window.devicePixelRatio || (window.screen.deviceXDPI / window.screen.logicalXDPI)) > 1
 	};
+
 }());

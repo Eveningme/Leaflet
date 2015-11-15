@@ -6,3 +6,11 @@ tmp/**/*
 *.iml
 *.sublime-*
 _site
+dist/*.js
+dist/*.map
+coverage/
+*.js.html
+index.html
+.mailmap
+bower.json
+component.json

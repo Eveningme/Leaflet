@@ -1,101 +1,227 @@
 /*
- * L.Mixin.Events adds custom events functionality to Leaflet classes
+ * L.Evented is a base class that Leaflet classes inherit from to handle custom events.
  */
 
-var key = '_leaflet_events';
+L.Evented = L.Class.extend({
 
-L.Mixin = {};
-
-L.Mixin.Events = {
-	
-	addEventListener: function (types, fn, context) { // (String, Function[, Object]) or (Object[, Object])
-		var events = this[key] = this[key] || {},
-			type, i, len;
-		
-		// Types can be a map of types/handlers
-		// Types可以是一个地图的一个类型或者是处理程序
-		if (typeof types === 'object') { //假如是一个object，循环object
-			for (type in types) {
-				if (types.hasOwnProperty(type)) { //判断types是否含有名称为type的属性
-					this.addEventListener(type, types[type], fn); //然后再次执行addEventListener
-				}
+	on: function (types, fn, context) {
+		// types can be a map of types/handlers
+		if (typeof types === 'object') {
+			for (var type in types) {
+				// we don't process space-separated events here for performance;
+				// it's a hot path since Layer uses the on(obj) syntax
+				this._on(type, types[type], fn);
 			}
-			
-			return this;
+
+		} else {
+			// types can be a string of space-separated words
+			types = L.Util.splitWords(types);
+
+			for (var i = 0, len = types.length; i < len; i++) {
+				this._on(types[i], fn, context);
+			}
 		}
-		
-		types = L.Util.splitWords(types);
-		
-		for (i = 0, len = types.length; i < len; i++) {
-			events[types[i]] = events[types[i]] || [];
-			events[types[i]].push({
-				action: fn,
-				context: context || this
-			});
-		}
-		
+
 		return this;
 	},
 
-	hasEventListeners: function (type) { // (String) -> Boolean
-		return (key in this) && (type in this[key]) && (this[key][type].length > 0);
+	off: function (types, fn, context) {
+
+		if (!types) {
+			// clear all listeners if called without arguments
+			delete this._events;
+
+		} else if (typeof types === 'object') {
+			for (var type in types) {
+				this._off(type, types[type], fn);
+			}
+
+		} else {
+			types = L.Util.splitWords(types);
+
+			for (var i = 0, len = types.length; i < len; i++) {
+				this._off(types[i], fn, context);
+			}
+		}
+
+		return this;
 	},
 
-	removeEventListener: function (types, fn, context) { // (String[, Function, Object]) or (Object[, Object])
-		var events = this[key],
-			type, i, len, listeners, j;
-		
-		if (typeof types === 'object') {
-			for (type in types) {
-				if (types.hasOwnProperty(type)) {
-					this.removeEventListener(type, types[type], fn);
-				}
+	// attach listener (without syntactic sugar now)
+	_on: function (type, fn, context) {
+
+		var events = this._events = this._events || {},
+		    contextId = context && context !== this && L.stamp(context);
+
+		if (contextId) {
+			// store listeners with custom context in a separate hash (if it has an id);
+			// gives a major performance boost when firing and removing events (e.g. on map object)
+
+			var indexKey = type + '_idx',
+			    indexLenKey = type + '_len',
+			    typeIndex = events[indexKey] = events[indexKey] || {},
+			    id = L.stamp(fn) + '_' + contextId;
+
+			if (!typeIndex[id]) {
+				typeIndex[id] = {fn: fn, ctx: context};
+
+				// keep track of the number of keys in the index to quickly check if it's empty
+				events[indexLenKey] = (events[indexLenKey] || 0) + 1;
 			}
-			
-			return this;
+
+		} else {
+			// individual layers mostly use "this" for context and don't fire listeners too often
+			// so simple array makes the memory footprint better while not degrading performance
+
+			events[type] = events[type] || [];
+			events[type].push({fn: fn});
 		}
-		
-		types = L.Util.splitWords(types);
+	},
 
-		for (i = 0, len = types.length; i < len; i++) {
+	_off: function (type, fn, context) {
+		var events = this._events,
+		    indexKey = type + '_idx',
+		    indexLenKey = type + '_len';
 
-			if (this.hasEventListeners(types[i])) { //判断this是否添加了types[i]这个事件
-				listeners = events[types[i]];
-				
-				for (j = listeners.length - 1; j >= 0; j--) {
-					if (
-						(!fn || listeners[j].action === fn) &&
-						(!context || (listeners[j].context === context))
-					) {
-						listeners.splice(j, 1);
+		if (!events) { return; }
+
+		if (!fn) {
+			// clear all listeners for a type if function isn't specified
+			delete events[type];
+			delete events[indexKey];
+			delete events[indexLenKey];
+			return;
+		}
+
+		var contextId = context && context !== this && L.stamp(context),
+		    listeners, i, len, listener, id;
+
+		if (contextId) {
+			id = L.stamp(fn) + '_' + contextId;
+			listeners = events[indexKey];
+
+			if (listeners && listeners[id]) {
+				listener = listeners[id];
+				delete listeners[id];
+				events[indexLenKey]--;
+			}
+
+		} else {
+			listeners = events[type];
+
+			if (listeners) {
+				for (i = 0, len = listeners.length; i < len; i++) {
+					if (listeners[i].fn === fn) {
+						listener = listeners[i];
+						listeners.splice(i, 1);
+						break;
 					}
 				}
 			}
 		}
-		
+
+		// set the removed listener to noop so that's not called if remove happens in fire
+		if (listener) {
+			listener.fn = L.Util.falseFn;
+		}
+	},
+
+	fire: function (type, data, propagate) {
+		if (!this.listens(type, propagate)) { return this; }
+
+		var event = L.Util.extend({}, data, {type: type, target: this}),
+		    events = this._events;
+
+		if (events) {
+			var typeIndex = events[type + '_idx'],
+			    i, len, listeners, id;
+
+			if (events[type]) {
+				// make sure adding/removing listeners inside other listeners won't cause infinite loop
+				listeners = events[type].slice();
+
+				for (i = 0, len = listeners.length; i < len; i++) {
+					listeners[i].fn.call(this, event);
+				}
+			}
+
+			// fire event for the context-indexed listeners as well
+			for (id in typeIndex) {
+				typeIndex[id].fn.call(typeIndex[id].ctx, event);
+			}
+		}
+
+		if (propagate) {
+			// propagate the event to parents (set with addEventParent)
+			this._propagateEvent(event);
+		}
+
 		return this;
 	},
 
-	fireEvent: function (type, data) { // (String[, Object])
-		if (!this.hasEventListeners(type)) {
+	listens: function (type, propagate) {
+		var events = this._events;
+
+		if (events && (events[type] || events[type + '_len'])) { return true; }
+
+		if (propagate) {
+			// also check parents for listeners if event propagates
+			for (var id in this._eventParents) {
+				if (this._eventParents[id].listens(type, propagate)) { return true; }
+			}
+		}
+		return false;
+	},
+
+	once: function (types, fn, context) {
+
+		if (typeof types === 'object') {
+			for (var type in types) {
+				this.once(type, types[type], fn);
+			}
 			return this;
 		}
 
-		var event = L.Util.extend({
-			type: type,
-			target: this
-		}, data);
+		var handler = L.bind(function () {
+			this
+			    .off(types, fn, context)
+			    .off(types, handler, context);
+		}, this);
 
-		var listeners = this[key][type].slice();
+		// add a listener that's executed once and removed after that
+		return this
+		    .on(types, fn, context)
+		    .on(types, handler, context);
+	},
 
-		for (var i = 0, len = listeners.length; i < len; i++) {
-			listeners[i].action.call(listeners[i].context || this, event);
-		}
-
+	// adds a parent to propagate events to (when you fire with true as a 3rd argument)
+	addEventParent: function (obj) {
+		this._eventParents = this._eventParents || {};
+		this._eventParents[L.stamp(obj)] = obj;
 		return this;
-	}
-};
+	},
 
-L.Mixin.Events.on = L.Mixin.Events.addEventListener;
-L.Mixin.Events.off = L.Mixin.Events.removeEventListener;
-L.Mixin.Events.fire = L.Mixin.Events.fireEvent;
+	removeEventParent: function (obj) {
+		if (this._eventParents) {
+			delete this._eventParents[L.stamp(obj)];
+		}
+		return this;
+	},
+
+	_propagateEvent: function (e) {
+		for (var id in this._eventParents) {
+			this._eventParents[id].fire(e.type, L.extend({layer: e.target}, e), true);
+		}
+	}
+});
+
+var proto = L.Evented.prototype;
+
+// aliases; we should ditch those eventually
+proto.addEventListener = proto.on;
+proto.removeEventListener = proto.clearAllEventListeners = proto.off;
+proto.addOneTimeEventListener = proto.once;
+proto.fireEvent = proto.fire;
+proto.hasEventListeners = proto.listens;
+
+L.Mixin = {Events: proto};

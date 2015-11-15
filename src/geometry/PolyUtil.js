@@ -1,8 +1,6 @@
 /*
- * L.PolyUtil contains utilify functions for polygons (clipping, etc.).
+ * L.PolyUtil contains utility functions for polygons (clipping, etc.).
  */
-
-/*jshint bitwise:false */ // allow bitwise oprations here
 
 L.PolyUtil = {};
 
@@ -10,15 +8,13 @@ L.PolyUtil = {};
  * Sutherland-Hodgeman polygon clipping algorithm.
  * Used to avoid rendering parts of a polygon that are not currently visible.
  */
-L.PolyUtil.clipPolygon = function (points, bounds) {
-	var min = bounds.min,
-		max = bounds.max,
-		clippedPoints,
-		edges = [1, 4, 2, 8],
-		i, j, k,
-		a, b,
-		len, edge, p,
-		lu = L.LineUtil;
+L.PolyUtil.clipPolygon = function (points, bounds, round) {
+	var clippedPoints,
+	    edges = [1, 4, 2, 8],
+	    i, j, k,
+	    a, b,
+	    len, edge, p,
+	    lu = L.LineUtil;
 
 	for (i = 0, len = points.length; i < len; i++) {
 		points[i]._code = lu._getBitCode(points[i], bounds);
@@ -37,7 +33,7 @@ L.PolyUtil.clipPolygon = function (points, bounds) {
 			if (!(a._code & edge)) {
 				// if b is outside the clip window (a->b goes out of screen)
 				if (b._code & edge) {
-					p = lu._getEdgeIntersection(b, a, edge, bounds);
+					p = lu._getEdgeIntersection(b, a, edge, bounds, round);
 					p._code = lu._getBitCode(p, bounds);
 					clippedPoints.push(p);
 				}
@@ -45,7 +41,7 @@ L.PolyUtil.clipPolygon = function (points, bounds) {
 
 			// else if b is inside the clip window (a->b enters the screen)
 			} else if (!(b._code & edge)) {
-				p = lu._getEdgeIntersection(b, a, edge, bounds);
+				p = lu._getEdgeIntersection(b, a, edge, bounds, round);
 				p._code = lu._getBitCode(p, bounds);
 				clippedPoints.push(p);
 			}
@@ -55,5 +51,3 @@ L.PolyUtil.clipPolygon = function (points, bounds) {
 
 	return points;
 };
-
-/*jshint bitwise:true */

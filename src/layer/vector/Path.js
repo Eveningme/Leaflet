@@ -1,112 +1,93 @@
 /*
- * L.Path is a base class for rendering vector paths on a map. It's inherited by Polyline, Circle, etc.
+ * L.Path is the base class for all Leaflet vector layers like polygons and circles.
  */
 
-L.Path = L.Class.extend({
-	includes: [L.Mixin.Events],
-
-	statics: {
-		// how much to extend the clip area around the map view
-		// (relative to its size, e.g. 0.5 is half the screen in each direction)
-		// set in such way that SVG element doesn't exceed 1280px (vector layers flicker on dragend if it is)
-		CLIP_PADDING: L.Browser.mobile ?
-			Math.max(0, Math.min(0.5,
-				(1280 / Math.max(window.innerWidth, window.innerHeight) - 1) / 2))
-			: 0.5
-	},
+L.Path = L.Layer.extend({
 
 	options: {
 		stroke: true,
-		color: '#0033ff',
-		dashArray: null,
-		weight: 5,
-		opacity: 0.5,
+		color: '#3388ff',
+		weight: 3,
+		opacity: 1,
+		lineCap: 'round',
+		lineJoin: 'round',
+		// dashArray: null
+		// dashOffset: null
 
-		fill: false,
-		fillColor: null, //same as color by default
+		// fill: false
+		// fillColor: same as color by default
 		fillOpacity: 0.2,
+		fillRule: 'evenodd',
 
-		clickable: true
+		// className: ''
+		interactive: true
 	},
 
-	initialize: function (options) {
-		L.Util.setOptions(this, options);
+	beforeAdd: function (map) {
+		// Renderer is set here because we need to call renderer.getEvents
+		// before this.getEvents.
+		this._renderer = map.getRenderer(this);
 	},
 
-	onAdd: function (map) {
-		this._map = map;
-
-		if (!this._container) {
-			this._initElements();
-			this._initEvents();
-		}
-
-		this.projectLatlngs();
-		this._updatePath();
-
-		if (this._container) {
-			this._map._pathRoot.appendChild(this._container);
-		}
-
-		map.on({
-			'viewreset': this.projectLatlngs,
-			'moveend': this._updatePath
-		}, this);
+	onAdd: function () {
+		this._renderer._initPath(this);
+		this._reset();
+		this._renderer._addPath(this);
 	},
 
-	addTo: function (map) {
-		map.addLayer(this);
-		return this;
+	onRemove: function () {
+		this._renderer._removePath(this);
 	},
 
-	onRemove: function (map) {
-		map._pathRoot.removeChild(this._container);
-
-		this._map = null;
-
-		if (L.Browser.vml) {
-			this._container = null;
-			this._stroke = null;
-			this._fill = null;
-		}
-
-		map.off({
-			'viewreset': this.projectLatlngs,
-			'moveend': this._updatePath
-		}, this);
-	},
-
-	projectLatlngs: function () {
-		// do all projection stuff here
-	},
-
-	setStyle: function (style) {
-		L.Util.setOptions(this, style);
-
-		if (this._container) {
-			this._updateStyle();
-		}
-
-		return this;
+	getEvents: function () {
+		return {
+			zoomend: this._project,
+			moveend: this._update,
+			viewreset: this._reset
+		};
 	},
 
 	redraw: function () {
 		if (this._map) {
-			this.projectLatlngs();
-			this._updatePath();
+			this._renderer._updatePath(this);
 		}
 		return this;
-	}
-});
+	},
 
-L.Map.include({
-	_updatePathViewport: function () {
-		var p = L.Path.CLIP_PADDING,
-			size = this.getSize(),
-			panePos = L.DomUtil.getPosition(this._mapPane),
-			min = panePos.multiplyBy(-1)._subtract(size.multiplyBy(p)._round()),
-			max = min.add(size.multiplyBy(1 + p * 2)._round());
+	setStyle: function (style) {
+		L.setOptions(this, style);
+		if (this._renderer) {
+			this._renderer._updateStyle(this);
+		}
+		return this;
+	},
 
-		this._pathViewport = new L.Bounds(min, max);
+	bringToFront: function () {
+		if (this._renderer) {
+			this._renderer._bringToFront(this);
+		}
+		return this;
+	},
+
+	bringToBack: function () {
+		if (this._renderer) {
+			this._renderer._bringToBack(this);
+		}
+		return this;
+	},
+
+	getElement: function () {
+		return this._path;
+	},
+
+	_reset: function () {
+		// defined in children classes
+		this._project();
+		this._update();
+	},
+
+	_clickTolerance: function () {
+		// used when doing hit detection for Canvas layers
+		return (this.options.stroke ? this.options.weight / 2 : 0) + (L.Browser.touch ? 10 : 0);
 	}
 });

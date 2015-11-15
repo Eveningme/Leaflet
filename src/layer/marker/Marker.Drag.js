@@ -9,47 +9,65 @@ L.Handler.MarkerDrag = L.Handler.extend({
 
 	addHooks: function () {
 		var icon = this._marker._icon;
+
 		if (!this._draggable) {
-			this._draggable = new L.Draggable(icon, icon)
-				.on('dragstart', this._onDragStart, this)
-				.on('drag', this._onDrag, this)
-				.on('dragend', this._onDragEnd, this);
+			this._draggable = new L.Draggable(icon, icon, true);
 		}
-		this._draggable.enable();
+
+		this._draggable.on({
+			dragstart: this._onDragStart,
+			drag: this._onDrag,
+			dragend: this._onDragEnd
+		}, this).enable();
+
+		L.DomUtil.addClass(icon, 'leaflet-marker-draggable');
 	},
 
 	removeHooks: function () {
-		this._draggable.disable();
+		this._draggable.off({
+			dragstart: this._onDragStart,
+			drag: this._onDrag,
+			dragend: this._onDragEnd
+		}, this).disable();
+
+		if (this._marker._icon) {
+			L.DomUtil.removeClass(this._marker._icon, 'leaflet-marker-draggable');
+		}
 	},
 
 	moved: function () {
 		return this._draggable && this._draggable._moved;
 	},
 
-	_onDragStart: function (e) {
+	_onDragStart: function () {
 		this._marker
-			.closePopup()
-			.fire('movestart')
-			.fire('dragstart');
+		    .closePopup()
+		    .fire('movestart')
+		    .fire('dragstart');
 	},
 
 	_onDrag: function (e) {
+		var marker = this._marker,
+		    shadow = marker._shadow,
+		    iconPos = L.DomUtil.getPosition(marker._icon),
+		    latlng = marker._map.layerPointToLatLng(iconPos);
+
 		// update shadow position
-		var iconPos = L.DomUtil.getPosition(this._marker._icon);
-		if (this._marker._shadow) {
-			L.DomUtil.setPosition(this._marker._shadow, iconPos);
+		if (shadow) {
+			L.DomUtil.setPosition(shadow, iconPos);
 		}
 
-		this._marker._latlng = this._marker._map.layerPointToLatLng(iconPos);
+		marker._latlng = latlng;
+		e.latlng = latlng;
 
-		this._marker
-			.fire('move')
-			.fire('drag');
+		marker
+		    .fire('move', e)
+		    .fire('drag', e);
 	},
 
-	_onDragEnd: function () {
+	_onDragEnd: function (e) {
 		this._marker
-			.fire('moveend')
-			.fire('dragend');
+		    .fire('moveend')
+		    .fire('dragend', e);
 	}
 });

@@ -1,34 +1,35 @@
 /*
- * Provides L.Map with convenient shortcuts for W3C geolocation.
+ * Provides L.Map with convenient shortcuts for using browser geolocation features.
  */
 
 L.Map.include({
 	_defaultLocateOptions: {
-		watch: false,
-		setView: false,
-		maxZoom: Infinity,
 		timeout: 10000,
-		maximumAge: 0,
-		enableHighAccuracy: false
+		watch: false
+		// setView: false
+		// maxZoom: <Number>
+		// maximumAge: 0
+		// enableHighAccuracy: false
 	},
 
-	locate: function (/*Object*/ options) {
+	locate: function (options) {
 
-		options = this._locationOptions = L.Util.extend(this._defaultLocateOptions, options);
+		options = this._locateOptions = L.extend({}, this._defaultLocateOptions, options);
 
-		if (!navigator.geolocation) {
+		if (!('geolocation' in navigator)) {
 			this._handleGeolocationError({
 				code: 0,
-				message: "Geolocation not supported."
+				message: 'Geolocation not supported.'
 			});
 			return this;
 		}
 
-		var onResponse = L.Util.bind(this._handleGeolocationResponse, this),
-			onError = L.Util.bind(this._handleGeolocationError, this);
+		var onResponse = L.bind(this._handleGeolocationResponse, this),
+		    onError = L.bind(this._handleGeolocationError, this);
 
 		if (options.watch) {
-			this._locationWatchId = navigator.geolocation.watchPosition(onResponse, onError, options);
+			this._locationWatchId =
+			        navigator.geolocation.watchPosition(onResponse, onError, options);
 		} else {
 			navigator.geolocation.getCurrentPosition(onResponse, onError, options);
 		}
@@ -36,51 +37,55 @@ L.Map.include({
 	},
 
 	stopLocate: function () {
-		if (navigator.geolocation) {
+		if (navigator.geolocation && navigator.geolocation.clearWatch) {
 			navigator.geolocation.clearWatch(this._locationWatchId);
+		}
+		if (this._locateOptions) {
+			this._locateOptions.setView = false;
 		}
 		return this;
 	},
 
 	_handleGeolocationError: function (error) {
 		var c = error.code,
-			message = error.message ||
-				(c === 1 ? "permission denied" :
-				(c === 2 ? "position unavailable" : "timeout"));
+		    message = error.message ||
+		            (c === 1 ? 'permission denied' :
+		            (c === 2 ? 'position unavailable' : 'timeout'));
 
-		if (this._locationOptions.setView && !this._loaded) {
+		if (this._locateOptions.setView && !this._loaded) {
 			this.fitWorld();
 		}
 
 		this.fire('locationerror', {
 			code: c,
-			message: "Geolocation error: " + message + "."
+			message: 'Geolocation error: ' + message + '.'
 		});
 	},
 
 	_handleGeolocationResponse: function (pos) {
-		var latAccuracy = 180 * pos.coords.accuracy / 4e7,
-			lngAccuracy = latAccuracy * 2,
-
-			lat = pos.coords.latitude,
-			lng = pos.coords.longitude,
-			latlng = new L.LatLng(lat, lng),
-
-			sw = new L.LatLng(lat - latAccuracy, lng - lngAccuracy),
-			ne = new L.LatLng(lat + latAccuracy, lng + lngAccuracy),
-			bounds = new L.LatLngBounds(sw, ne),
-
-			options = this._locationOptions;
+		var lat = pos.coords.latitude,
+		    lng = pos.coords.longitude,
+		    latlng = new L.LatLng(lat, lng),
+		    bounds = latlng.toBounds(pos.coords.accuracy),
+		    options = this._locateOptions;
 
 		if (options.setView) {
-			var zoom = Math.min(this.getBoundsZoom(bounds), options.maxZoom);
-			this.setView(latlng, zoom);
+			var zoom = this.getBoundsZoom(bounds);
+			this.setView(latlng, options.maxZoom ? Math.min(zoom, options.maxZoom) : zoom);
 		}
 
-		this.fire('locationfound', {
+		var data = {
 			latlng: latlng,
 			bounds: bounds,
-			accuracy: pos.coords.accuracy
-		});
+			timestamp: pos.timestamp
+		};
+
+		for (var i in pos.coords) {
+			if (typeof pos.coords[i] === 'number') {
+				data[i] = pos.coords[i];
+			}
+		}
+
+		this.fire('locationfound', data);
 	}
 });

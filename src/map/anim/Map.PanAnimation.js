@@ -1,38 +1,53 @@
+/*
+ * Extends L.Map to handle panning animations.
+ */
 
 L.Map.include({
 
-	setView: function (center, zoom, forceReset) {
-		zoom = this._limitZoom(zoom);
+	setView: function (center, zoom, options) {
 
-		var zoomChanged = (this._zoom !== zoom);
+		zoom = zoom === undefined ? this._zoom : this._limitZoom(zoom);
+		center = this._limitCenter(L.latLng(center), zoom, this.options.maxBounds);
+		options = options || {};
 
-		if (this._loaded && !forceReset && this._layers) {
+		this.stop();
 
-			if (this._panAnim) {
-				this._panAnim.stop();
+		if (this._loaded && !options.reset && options !== true) {
+
+			if (options.animate !== undefined) {
+				options.zoom = L.extend({animate: options.animate}, options.zoom);
+				options.pan = L.extend({animate: options.animate, duration: options.duration}, options.pan);
 			}
 
-			var done = (zoomChanged ?
-					this._zoomToIfClose && this._zoomToIfClose(center, zoom) :
-					this._panByIfClose(center));
+			// try animating pan or zoom
+			var moved = (this._zoom !== zoom) ?
+				this._tryAnimatedZoom && this._tryAnimatedZoom(center, zoom, options.zoom) :
+				this._tryAnimatedPan(center, options.pan);
 
-			// exit if animated pan or zoom started
-			if (done) {
+			if (moved) {
+				// prevent resize handler call, the view will refresh after animation anyway
 				clearTimeout(this._sizeTimer);
 				return this;
 			}
 		}
 
-		// reset the map view
+		// animation didn't start, just reset the map view
 		this._resetView(center, zoom);
 
 		return this;
 	},
 
-	panBy: function (offset, duration) {
-		offset = L.point(offset);
+	panBy: function (offset, options) {
+		offset = L.point(offset).round();
+		options = options || {};
 
-		if (!(offset.x || offset.y)) {
+		if (!offset.x && !offset.y) {
+			return this.fire('moveend');
+		}
+		// If we pan too far, Chrome gets issues with tiles
+		// and makes them disappear or appear in the wrong place (slightly offset) #2602
+		if (options.animate !== true && !this.getSize().contains(offset)) {
+			this._resetView(this.unproject(this.project(this.getCenter()).add(offset)), this.getZoom());
 			return this;
 		}
 
@@ -45,12 +60,21 @@ L.Map.include({
 			}, this);
 		}
 
-		this.fire('movestart');
+		// don't fire movestart if animating inertia
+		if (!options.noMoveStart) {
+			this.fire('movestart');
+		}
 
-		L.DomUtil.addClass(this._mapPane, 'leaflet-pan-anim');
+		// animate pan unless animate: false specified
+		if (options.animate !== false) {
+			L.DomUtil.addClass(this._mapPane, 'leaflet-pan-anim');
 
-		var newPos = L.DomUtil.getPosition(this._mapPane).subtract(offset);
-		this._panAnim.run(this._mapPane, newPos, duration || 0.25);
+			var newPos = this._getMapPanePos().subtract(offset);
+			this._panAnim.run(this._mapPane, newPos, options.duration || 0.25, options.easeLinearity);
+		} else {
+			this._rawPanBy(offset);
+			this.fire('move').fire('moveend');
+		}
 
 		return this;
 	},
@@ -64,22 +88,15 @@ L.Map.include({
 		this.fire('moveend');
 	},
 
-	_panByIfClose: function (center) {
+	_tryAnimatedPan: function (center, options) {
 		// difference between the new and current centers in pixels
 		var offset = this._getCenterOffset(center)._floor();
 
-		if (this._offsetIsWithinView(offset)) {
-			this.panBy(offset);
-			return true;
-		}
-		return false;
-	},
+		// don't animate too far unless animate: true specified in options
+		if ((options && options.animate) !== true && !this.getSize().contains(offset)) { return false; }
 
-	_offsetIsWithinView: function (offset, multiplyFactor) {
-		var m = multiplyFactor || 1,
-			size = this.getSize();
+		this.panBy(offset, options);
 
-		return (Math.abs(offset.x) <= size.x * m) &&
-				(Math.abs(offset.y) <= size.y * m);
+		return true;
 	}
 });

@@ -1,33 +1,35 @@
+/*
+ * L.Control.Attribution is used for displaying attribution on the map (added by default).
+ */
+
 L.Control.Attribution = L.Control.extend({
 	options: {
 		position: 'bottomright',
-		prefix: 'Powered by <a href="http://leaflet.cloudmade.com">Leaflet</a>'
+		prefix: '<a href="http://leafletjs.com" title="A JS library for interactive maps">Leaflet</a>'
 	},
 
 	initialize: function (options) {
-		L.Util.setOptions(this, options);
+		L.setOptions(this, options);
 
 		this._attributions = {};
 	},
 
 	onAdd: function (map) {
 		this._container = L.DomUtil.create('div', 'leaflet-control-attribution');
-		L.DomEvent.disableClickPropagation(this._container);
+		if (L.DomEvent) {
+			L.DomEvent.disableClickPropagation(this._container);
+		}
 
-		map
-			.on('layeradd', this._onLayerAdd, this)
-			.on('layerremove', this._onLayerRemove, this);
+		// TODO ugly, refactor
+		for (var i in map._layers) {
+			if (map._layers[i].getAttribution) {
+				this.addAttribution(map._layers[i].getAttribution());
+			}
+		}
 
 		this._update();
 
 		return this._container;
-	},
-
-	onRemove: function (map) {
-		map
-			.off('layeradd', this._onLayerAdd)
-			.off('layerremove', this._onLayerRemove);
-
 	},
 
 	setPrefix: function (prefix) {
@@ -37,7 +39,7 @@ L.Control.Attribution = L.Control.extend({
 	},
 
 	addAttribution: function (text) {
-		if (!text) { return; }
+		if (!text) { return this; }
 
 		if (!this._attributions[text]) {
 			this._attributions[text] = 0;
@@ -50,10 +52,12 @@ L.Control.Attribution = L.Control.extend({
 	},
 
 	removeAttribution: function (text) {
-		if (!text) { return; }
+		if (!text) { return this; }
 
-		this._attributions[text]--;
-		this._update();
+		if (this._attributions[text]) {
+			this._attributions[text]--;
+			this._update();
+		}
 
 		return this;
 	},
@@ -64,7 +68,7 @@ L.Control.Attribution = L.Control.extend({
 		var attribs = [];
 
 		for (var i in this._attributions) {
-			if (this._attributions.hasOwnProperty(i) && this._attributions[i]) {
+			if (this._attributions[i]) {
 				attribs.push(i);
 			}
 		}
@@ -78,19 +82,7 @@ L.Control.Attribution = L.Control.extend({
 			prefixAndAttribs.push(attribs.join(', '));
 		}
 
-		this._container.innerHTML = prefixAndAttribs.join(' &#8212; ');
-	},
-
-	_onLayerAdd: function (e) {
-		if (e.layer.getAttribution) {
-			this.addAttribution(e.layer.getAttribution());
-		}
-	},
-
-	_onLayerRemove: function (e) {
-		if (e.layer.getAttribution) {
-			this.removeAttribution(e.layer.getAttribution());
-		}
+		this._container.innerHTML = prefixAndAttribs.join(' | ');
 	}
 });
 

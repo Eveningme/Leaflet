@@ -1,73 +1,69 @@
 /*
- * L.PosAnimation is used by Leaflet internally for pan animations.
+ * L.PosAnimation powers Leaflet pan animations internally.
  */
 
-L.PosAnimation = L.Class.extend({
-	includes: L.Mixin.Events,
+L.PosAnimation = L.Evented.extend({
 
-	run: function (el, newPos, duration, easing) { // (HTMLElement, Point[, Number, String])
+	run: function (el, newPos, duration, easeLinearity) { // (HTMLElement, Point[, Number, Number])
 		this.stop();
 
 		this._el = el;
 		this._inProgress = true;
+		this._duration = duration || 0.25;
+		this._easeOutPower = 1 / Math.max(easeLinearity || 0.5, 0.2);
+
+		this._startPos = L.DomUtil.getPosition(el);
+		this._offset = newPos.subtract(this._startPos);
+		this._startTime = +new Date();
 
 		this.fire('start');
 
-		el.style[L.DomUtil.TRANSITION] = 'all ' + (duration || 0.25) + 's ' + (easing || 'ease-out');
-
-		L.DomEvent.on(el, L.DomUtil.TRANSITION_END, this._onTransitionEnd, this);
-		L.DomUtil.setPosition(el, newPos);
-
-		// toggle reflow, Chrome flickers for some reason if you don't do this
-		L.Util.falseFn(el.offsetWidth);
-
-		// there's no native way to track value updates of tranisitioned properties, so we imitate this
-		this._stepTimer = setInterval(L.Util.bind(this.fire, this, 'step'), 50);
+		this._animate();
 	},
 
 	stop: function () {
 		if (!this._inProgress) { return; }
 
-		// if we just removed the transition property, the element would jump to its final position,
-		// so we need to make it stay at the current position
-
-		L.DomUtil.setPosition(this._el, this._getPos());
-		this._onTransitionEnd();
+		this._step(true);
+		this._complete();
 	},
 
-	// you can't easily get intermediate values of properties animated with CSS3 Transitions,
-	// we need to parse computed style (in case of transform it returns matrix string)
+	_animate: function () {
+		// animation loop
+		this._animId = L.Util.requestAnimFrame(this._animate, this);
+		this._step();
+	},
 
-	_transformRe: /(-?[\d\.]+), (-?[\d\.]+)\)/,
+	_step: function (round) {
+		var elapsed = (+new Date()) - this._startTime,
+		    duration = this._duration * 1000;
 
-	_getPos: function () {
-		var left, top, matches,
-			el = this._el,
-			style = window.getComputedStyle(el);
-
-		if (L.Browser.any3d) {
-			matches = style[L.DomUtil.TRANSFORM].match(this._transformRe);
-			left = parseFloat(matches[1]);
-			top  = parseFloat(matches[2]);
+		if (elapsed < duration) {
+			this._runFrame(this._easeOut(elapsed / duration), round);
 		} else {
-			left = parseFloat(style.left);
-			top  = parseFloat(style.top);
+			this._runFrame(1);
+			this._complete();
 		}
-
-		return new L.Point(left, top, true);
 	},
 
-	_onTransitionEnd: function () {
-		L.DomEvent.off(this._el, L.DomUtil.TRANSITION_END, this._onTransitionEnd, this);
+	_runFrame: function (progress, round) {
+		var pos = this._startPos.add(this._offset.multiplyBy(progress));
+		if (round) {
+			pos._round();
+		}
+		L.DomUtil.setPosition(this._el, pos);
 
-		if (!this._inProgress) { return; }
+		this.fire('step');
+	},
+
+	_complete: function () {
+		L.Util.cancelAnimFrame(this._animId);
+
 		this._inProgress = false;
+		this.fire('end');
+	},
 
-		this._el.style[L.DomUtil.TRANSITION] = '';
-
-		clearInterval(this._stepTimer);
-
-		this.fire('step').fire('end');
+	_easeOut: function (t) {
+		return 1 - Math.pow(1 - t, this._easeOutPower);
 	}
-
 });

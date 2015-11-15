@@ -1,67 +1,58 @@
+/*
+Leaflet building, testing and linting scripts.
+
+To use, install Node, then run the following commands in the project root:
+
+    npm install -g jake
+    npm install
+
+To check the code for errors and build Leaflet from source, run "jake".
+To run the tests, run "jake test".
+
+For a custom build, open build/build.html in the browser and follow the instructions.
+*/
+
 var build = require('./build/build.js'),
-    lint = require('./build/hint.js');
+    version = require('./src/Leaflet.js').version;
 
-var COPYRIGHT = '/*\n Copyright (c) 2010-2012, CloudMade, Vladimir Agafonkin\n' +
-                ' Leaflet is an open-source JavaScript library for mobile-friendly interactive maps.\n' + 
-                ' http://leaflet.cloudmade.com\n*/\n';
+function hint(msg, args) {
+	return function () {
+		console.log(msg);
+		jake.exec('node node_modules/eslint/bin/eslint.js ' + args,
+				{printStdout: true}, function () {
+			console.log('\tCheck passed.\n');
+			complete();
+		});
+	};
+}
 
-desc('Check Leaflet source for errors with JSHint');
-task('lint', function () {
+desc('Check Leaflet source for errors with ESLint');
+task('lint', {async: true}, hint('Checking for JS errors...', 'src --config .eslintrc'));
 
-	var files = build.getFiles();
-
-	console.log('Checking for JS errors...');
-
-	var errorsFound = lint.jshint(files);
-
-	if (errorsFound > 0) {
-		console.log(errorsFound + ' error(s) found.\n');
-		fail();
-	} else {
-		console.log('\tCheck passed');
-	}
-});
+desc('Check Leaflet specs source for errors with ESLint');
+task('lintspec', {async: true}, hint('Checking for specs JS errors...', 'spec/suites --config spec/.eslintrc'));
 
 desc('Combine and compress Leaflet source files');
-task('build', ['lint'], function (compsBase32, buildName) {
+task('build', {async: true}, function (compsBase32, buildName) {
+	var v;
 
-	var files = build.getFiles(compsBase32);
+	jake.exec('git log -1 --pretty=format:"%h"', {breakOnError: false}, function () {
+		build.build(complete, v, compsBase32, buildName);
 
-	console.log('Concatenating ' + files.length + ' files...');
-
-	var content = build.combineFiles(files),
-	    newSrc = COPYRIGHT + content,
-
-	    pathPart = 'dist/leaflet' + (buildName ? '-' + buildName : ''),
-	    srcPath = pathPart + '-src.js',
-
-	    oldSrc = build.load(srcPath),
-	    srcDelta = build.getSizeDelta(newSrc, oldSrc);
-
-	console.log('\tUncompressed size: ' + newSrc.length + ' bytes (' + srcDelta + ')');
-
-	if (newSrc === oldSrc) {
-		console.log('\tNo changes');
-	} else {
-		build.save(srcPath, newSrc);
-		console.log('\tSaved to ' + srcPath);
-	}
-
-	console.log('Compressing...');
-
-	var path = pathPart + '.js',
-	    oldCompressed = build.load(path),
-	    newCompressed = COPYRIGHT + build.uglify(content),
-	    delta = build.getSizeDelta(newCompressed, oldCompressed);
-
-	console.log('\tCompressed size: ' + newCompressed.length + ' bytes (' + delta + ')');
-
-	if (newCompressed === oldCompressed) {
-		console.log('\tNo changes');
-	} else {
-		build.save(path, newCompressed);
-		console.log('\tSaved to ' + path);
-	}
+	}).on('stdout', function (data) {
+		v = version + ' (' + data.toString() + ')';
+	}).on('error', function () {
+		v = version;
+	});
 });
 
-task('default', ['build']);
+desc('Run PhantomJS tests');
+task('test', ['lint', 'lintspec'], {async: true}, function () {
+	build.test(complete);
+});
+
+task('default', ['test', 'build']);
+
+jake.addListener('complete', function () {
+  process.exit();
+});

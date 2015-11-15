@@ -1,31 +1,33 @@
 /*
- * Class powers the OOP facilities of the library. Thanks to John Resig and Dean Edwards for inspiration!
+ * L.Class powers the OOP facilities of the library.
+ * Thanks to John Resig and Dean Edwards for inspiration!
  */
 
 L.Class = function () {};
 
-L.Class.extend = function (/*Object*/ props) /*-> Class*/ {
+L.Class.extend = function (props) {
 
 	// extended class with the new prototype
 	// 用新的原型拓展类
 	var NewClass = function () {
+
+		// call the constructor
 		if (this.initialize) {
 			this.initialize.apply(this, arguments);
 		}
+
+		// call all constructor hooks
+		this.callInitHooks();
 	};
 
-	// instantiate class without calling constructor
-	// 不调用构造函数实例化类
-	var F = function () {};
-	F.prototype = this.prototype;
+	var parentProto = NewClass.__super__ = this.prototype;
 
-	var proto = new F();
+	var proto = L.Util.create(parentProto);
 	proto.constructor = NewClass;
 
 	NewClass.prototype = proto;
 
 	// inherit parent's statics
-	// 继承父类的静态方法
 	for (var i in this) {
 		// 判断this中是否有名称为i的属性，并且i不等于'prototype'
 		if (this.hasOwnProperty(i) && i !== 'prototype') {
@@ -36,7 +38,7 @@ L.Class.extend = function (/*Object*/ props) /*-> Class*/ {
 	// mix static properties into the class
 	// 混合静态属性添加到类
 	if (props.statics) {
-		L.Util.extend(NewClass, props.statics);
+		L.extend(NewClass, props.statics);
 		delete props.statics;
 	}
 
@@ -48,13 +50,30 @@ L.Class.extend = function (/*Object*/ props) /*-> Class*/ {
 	}
 
 	// merge options
-	// 合并选项
-	if (props.options && proto.options) {
-		props.options = L.Util.extend({}, proto.options, props.options);
+	if (proto.options) {
+		props.options = L.Util.extend(L.Util.create(proto.options), props.options);
 	}
 
 	// mix given properties into the prototype
-	L.Util.extend(proto, props);
+	L.extend(proto, props);
+
+	proto._initHooks = [];
+
+	// add method for calling all hooks
+	proto.callInitHooks = function () {
+
+		if (this._initHooksCalled) { return; }
+
+		if (parentProto.callInitHooks) {
+			parentProto.callInitHooks.call(this);
+		}
+
+		this._initHooksCalled = true;
+
+		for (var i = 0, len = proto._initHooks.length; i < len; i++) {
+			proto._initHooks[i].call(this);
+		}
+	};
 
 	return NewClass;
 };
@@ -62,9 +81,22 @@ L.Class.extend = function (/*Object*/ props) /*-> Class*/ {
 
 // method for adding properties to prototype
 L.Class.include = function (props) {
-	L.Util.extend(this.prototype, props);
+	L.extend(this.prototype, props);
 };
 
+// merge new default options to the Class
 L.Class.mergeOptions = function (options) {
-	L.Util.extend(this.prototype.options, options);
+	L.extend(this.prototype.options, options);
+};
+
+// add a constructor hook
+L.Class.addInitHook = function (fn) { // (Function) || (String, args...)
+	var args = Array.prototype.slice.call(arguments, 1);
+
+	var init = typeof fn === 'function' ? fn : function () {
+		this[fn].apply(this, args);
+	};
+
+	this.prototype._initHooks = this.prototype._initHooks || [];
+	this.prototype._initHooks.push(init);
 };

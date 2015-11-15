@@ -1,40 +1,46 @@
+/*
+ * L.Icon is an image-based icon class that you can use with L.Marker for custom markers.
+ */
+
 L.Icon = L.Class.extend({
+	/*
 	options: {
-		/*
 		iconUrl: (String) (required)
+		iconRetinaUrl: (String) (optional, used for retina devices if detected)
 		iconSize: (Point) (can be set through CSS)
-		iconAnchor: (Point) (centered by default if size is specified, can be set in CSS with negative margins)
+		iconAnchor: (Point) (centered by default, can be set in CSS with negative margins)
 		popupAnchor: (Point) (if not specified, popup opens in the anchor point)
-		shadowUrl: (Point) (no shadow by default)
+		shadowUrl: (String) (no shadow by default)
+		shadowRetinaUrl: (String) (optional, used for retina devices if detected)
 		shadowSize: (Point)
 		shadowAnchor: (Point)
-		*/
-		className: ''
+		className: (String)
 	},
+	*/
 
 	initialize: function (options) {
-		L.Util.setOptions(this, options);
+		L.setOptions(this, options);
 	},
 
-	createIcon: function () {
-		return this._createIcon('icon');
+	createIcon: function (oldIcon) {
+		return this._createIcon('icon', oldIcon);
 	},
 
-	createShadow: function () {
-		return this._createIcon('shadow');
+	createShadow: function (oldIcon) {
+		return this._createIcon('shadow', oldIcon);
 	},
 
-	_createIcon: function (name) {
+	_createIcon: function (name, oldIcon) {
 		var src = this._getIconUrl(name);
 
 		if (!src) {
 			if (name === 'icon') {
-				throw new Error("iconUrl not set in Icon options (see the docs).");
+				throw new Error('iconUrl not set in Icon options (see the docs).');
 			}
 			return null;
 		}
 
-		var img = this._createImg(src);
+		var img = this._createImg(src, oldIcon && oldIcon.tagName === 'IMG' ? oldIcon : null);
 		this._setIconStyles(img, name);
 
 		return img;
@@ -42,20 +48,11 @@ L.Icon = L.Class.extend({
 
 	_setIconStyles: function (img, name) {
 		var options = this.options,
-			size = L.point(options[name + 'Size']),
-			anchor;
+		    size = L.point(options[name + 'Size']),
+		    anchor = L.point(name === 'shadow' && options.shadowAnchor || options.iconAnchor ||
+		            size && size.divideBy(2, true));
 
-		if (name === 'shadow') {
-			anchor = L.point(options.shadowAnchor || options.iconAnchor);
-		} else {
-			anchor = L.point(options.iconAnchor);
-		}
-
-		if (!anchor && size) {
-			anchor = size.divideBy(2, true);
-		}
-
-		img.className = 'leaflet-marker-' + name + ' ' + options.className;
+		img.className = 'leaflet-marker-' + name + ' ' + (options.className || '');
 
 		if (anchor) {
 			img.style.marginLeft = (-anchor.x) + 'px';
@@ -68,21 +65,14 @@ L.Icon = L.Class.extend({
 		}
 	},
 
-	_createImg: function (src) {
-		var el;
-
-		if (!L.Browser.ie6) {
-			el = document.createElement('img');
-			el.src = src;
-		} else {
-			el = document.createElement('div');
-			el.style.filter = 'progid:DXImageTransform.Microsoft.AlphaImageLoader(src="' + src + '")';
-		}
+	_createImg: function (src, el) {
+		el = el || document.createElement('img');
+		el.src = src;
 		return el;
 	},
 
 	_getIconUrl: function (name) {
-		return this.options[name + 'Url'];
+		return L.Browser.retina && this.options[name + 'RetinaUrl'] || this.options[name + 'Url'];
 	}
 });
 

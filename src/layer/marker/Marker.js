@@ -2,56 +2,57 @@
  * L.Marker is used to display clickable/draggable icons on the map.
  */
 
-L.Marker = L.Class.extend({
-
-	includes: L.Mixin.Events,
+L.Marker = L.Layer.extend({
 
 	options: {
+		pane: 'markerPane',
+		nonBubblingEvents: ['click', 'dblclick', 'mouseover', 'mouseout', 'contextmenu'],
+
 		icon: new L.Icon.Default(),
-		title: '',
-		clickable: true,
-		draggable: false,
+		// title: '',
+		// alt: '',
+		interactive: true,
+		// draggable: false,
+		keyboard: true,
 		zIndexOffset: 0,
-		opacity: 1
+		opacity: 1,
+		// riseOnHover: false,
+		riseOffset: 250
 	},
 
 	initialize: function (latlng, options) {
-		L.Util.setOptions(this, options);
+		L.setOptions(this, options);
 		this._latlng = L.latLng(latlng);
 	},
 
 	onAdd: function (map) {
-		this._map = map;
-
-		map.on('viewreset', this.update, this);
+		this._zoomAnimated = this._zoomAnimated && map.options.markerZoomAnimation;
 
 		this._initIcon();
 		this.update();
+	},
 
-		if (map.options.zoomAnimation && map.options.markerZoomAnimation) {
-			map.on('zoomanim', this._animateZoom, this);
+	onRemove: function () {
+		if (this.dragging && this.dragging.enabled()) {
+			this.options.draggable = true;
+			this.dragging.removeHooks();
 		}
-	},
 
-	addTo: function (map) {
-		map.addLayer(this);
-		return this;
-	},
-
-	onRemove: function (map) {
 		this._removeIcon();
+		this._removeShadow();
+	},
 
-		// TODO move to Marker.Popup.js
-		if (this.closePopup) {
-			this.closePopup();
+	getEvents: function () {
+		var events = {
+			zoom: this.update,
+			viewreset: this.update
+		};
+
+		if (this._zoomAnimated) {
+			events.zoomanim = this._animateZoom;
 		}
 
-		map.off({
-			'viewreset': this.update,
-			'zoomanim': this._animateZoom
-		}, this);
-
-		this._map = null;
+		return events;
 	},
 
 	getLatLng: function () {
@@ -59,24 +60,18 @@ L.Marker = L.Class.extend({
 	},
 
 	setLatLng: function (latlng) {
+		var oldLatLng = this._latlng;
 		this._latlng = L.latLng(latlng);
-
 		this.update();
-
-		if (this._popup) {
-			this._popup.setLatLng(latlng);
-		}
+		return this.fire('move', {oldLatLng: oldLatLng, latlng: this._latlng});
 	},
 
 	setZIndexOffset: function (offset) {
 		this.options.zIndexOffset = offset;
-		this.update();
+		return this.update();
 	},
 
 	setIcon: function (icon) {
-		if (this._map) {
-			this._removeIcon();
-		}
 
 		this.options.icon = icon;
 
@@ -84,66 +79,112 @@ L.Marker = L.Class.extend({
 			this._initIcon();
 			this.update();
 		}
+
+		if (this._popup) {
+			this.bindPopup(this._popup, this._popup.options);
+		}
+
+		return this;
+	},
+
+	getElement: function () {
+		return this._icon;
 	},
 
 	update: function () {
-		if (!this._icon) { return; }
 
-		var pos = this._map.latLngToLayerPoint(this._latlng).round();
-		this._setPos(pos);
+		if (this._icon) {
+			var pos = this._map.latLngToLayerPoint(this._latlng).round();
+			this._setPos(pos);
+		}
+
+		return this;
 	},
 
 	_initIcon: function () {
 		var options = this.options,
-		    map = this._map,
-		    animation = (map.options.zoomAnimation && map.options.markerZoomAnimation),
-		    classToAdd = animation ? 'leaflet-zoom-animated' : 'leaflet-zoom-hide',
-		    needOpacityUpdate = false;
+		    classToAdd = 'leaflet-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
 
-		if (!this._icon) {
-			this._icon = options.icon.createIcon();
+		var icon = options.icon.createIcon(this._icon),
+		    addIcon = false;
+
+		// if we're not reusing the icon, remove the old one and init new one
+		if (icon !== this._icon) {
+			if (this._icon) {
+				this._removeIcon();
+			}
+			addIcon = true;
 
 			if (options.title) {
-				this._icon.title = options.title;
+				icon.title = options.title;
 			}
-
-			this._initInteraction();
-			needOpacityUpdate = (this.options.opacity < 1);
-
-			L.DomUtil.addClass(this._icon, classToAdd);
-		}
-		if (!this._shadow) {
-			this._shadow = options.icon.createShadow();
-
-			if (this._shadow) {
-				L.DomUtil.addClass(this._shadow, classToAdd);
-				needOpacityUpdate = (this.options.opacity < 1);
+			if (options.alt) {
+				icon.alt = options.alt;
 			}
 		}
 
-		if (needOpacityUpdate) {
+		L.DomUtil.addClass(icon, classToAdd);
+
+		if (options.keyboard) {
+			icon.tabIndex = '0';
+		}
+
+		this._icon = icon;
+
+		if (options.riseOnHover) {
+			this.on({
+				mouseover: this._bringToFront,
+				mouseout: this._resetZIndex
+			});
+		}
+
+		var newShadow = options.icon.createShadow(this._shadow),
+		    addShadow = false;
+
+		if (newShadow !== this._shadow) {
+			this._removeShadow();
+			addShadow = true;
+		}
+
+		if (newShadow) {
+			L.DomUtil.addClass(newShadow, classToAdd);
+		}
+		this._shadow = newShadow;
+
+
+		if (options.opacity < 1) {
 			this._updateOpacity();
 		}
 
-		var panes = this._map._panes;
 
-		panes.markerPane.appendChild(this._icon);
-
-		if (this._shadow) {
-			panes.shadowPane.appendChild(this._shadow);
+		if (addIcon) {
+			this.getPane().appendChild(this._icon);
+		}
+		this._initInteraction();
+		if (newShadow && addShadow) {
+			this.getPane('shadowPane').appendChild(this._shadow);
 		}
 	},
 
 	_removeIcon: function () {
-		var panes = this._map._panes;
-
-		panes.markerPane.removeChild(this._icon);
-
-		if (this._shadow) {
-			panes.shadowPane.removeChild(this._shadow);
+		if (this.options.riseOnHover) {
+			this.off({
+				mouseover: this._bringToFront,
+				mouseout: this._resetZIndex
+			});
 		}
 
-		this._icon = this._shadow = null;
+		L.DomUtil.remove(this._icon);
+		this.removeInteractiveTarget(this._icon);
+
+		this._icon = null;
+	},
+
+	_removeShadow: function () {
+		if (this._shadow) {
+			L.DomUtil.remove(this._shadow);
+		}
+		this._shadow = null;
 	},
 
 	_setPos: function (pos) {
@@ -153,54 +194,41 @@ L.Marker = L.Class.extend({
 			L.DomUtil.setPosition(this._shadow, pos);
 		}
 
-		this._icon.style.zIndex = pos.y + this.options.zIndexOffset;
+		this._zIndex = pos.y + this.options.zIndexOffset;
+
+		this._resetZIndex();
+	},
+
+	_updateZIndex: function (offset) {
+		this._icon.style.zIndex = this._zIndex + offset;
 	},
 
 	_animateZoom: function (opt) {
-		var pos = this._map._latLngToNewLayerPoint(this._latlng, opt.zoom, opt.center);
+		var pos = this._map._latLngToNewLayerPoint(this._latlng, opt.zoom, opt.center).round();
 
 		this._setPos(pos);
 	},
 
 	_initInteraction: function () {
-		if (!this.options.clickable) {
-			return;
-		}
 
-		var icon = this._icon,
-			events = ['dblclick', 'mousedown', 'mouseover', 'mouseout'];
+		if (!this.options.interactive) { return; }
 
-		L.DomUtil.addClass(icon, 'leaflet-clickable');
-		L.DomEvent.on(icon, 'click', this._onMouseClick, this);
+		L.DomUtil.addClass(this._icon, 'leaflet-interactive');
 
-		for (var i = 0; i < events.length; i++) {
-			L.DomEvent.on(icon, events[i], this._fireMouseEvent, this);
-		}
+		this.addInteractiveTarget(this._icon);
 
 		if (L.Handler.MarkerDrag) {
+			var draggable = this.options.draggable;
+			if (this.dragging) {
+				draggable = this.dragging.enabled();
+				this.dragging.disable();
+			}
+
 			this.dragging = new L.Handler.MarkerDrag(this);
 
-			if (this.options.draggable) {
+			if (draggable) {
 				this.dragging.enable();
 			}
-		}
-	},
-
-	_onMouseClick: function (e) {
-		L.DomEvent.stopPropagation(e);
-		if (this.dragging && this.dragging.moved()) { return; }
-		if (this._map.dragging && this._map.dragging.moved()) { return; }
-		this.fire(e.type, {
-			originalEvent: e
-		});
-	},
-
-	_fireMouseEvent: function (e) {
-		this.fire(e.type, {
-			originalEvent: e
-		});
-		if (e.type !== 'mousedown') {
-			L.DomEvent.stopPropagation(e);
 		}
 	},
 
@@ -209,13 +237,26 @@ L.Marker = L.Class.extend({
 		if (this._map) {
 			this._updateOpacity();
 		}
+
+		return this;
 	},
 
 	_updateOpacity: function () {
-		L.DomUtil.setOpacity(this._icon, this.options.opacity);
+		var opacity = this.options.opacity;
+
+		L.DomUtil.setOpacity(this._icon, opacity);
+
 		if (this._shadow) {
-			L.DomUtil.setOpacity(this._shadow, this.options.opacity);
+			L.DomUtil.setOpacity(this._shadow, opacity);
 		}
+	},
+
+	_bringToFront: function () {
+		this._updateZIndex(this.options.riseOffset);
+	},
+
+	_resetZIndex: function () {
+		this._updateZIndex(0);
 	}
 });
 

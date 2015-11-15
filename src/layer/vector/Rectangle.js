@@ -1,5 +1,5 @@
 /*
- * L.Rectangle extends Polygon and creates a rectangle when passed a LatLngBounds
+ * L.Rectangle extends Polygon and creates a rectangle when passed a LatLngBounds object.
  */
 
 L.Rectangle = L.Polygon.extend({
@@ -8,18 +8,17 @@ L.Rectangle = L.Polygon.extend({
 	},
 
 	setBounds: function (latLngBounds) {
-		this.setLatLngs(this._boundsToLatLngs(latLngBounds));
+		return this.setLatLngs(this._boundsToLatLngs(latLngBounds));
 	},
 
 	_boundsToLatLngs: function (latLngBounds) {
 		latLngBounds = L.latLngBounds(latLngBounds);
-	    return [
-	        latLngBounds.getSouthWest(),
-	        latLngBounds.getNorthWest(),
-	        latLngBounds.getNorthEast(),
-	        latLngBounds.getSouthEast(),
-	        latLngBounds.getSouthWest()
-	    ];
+		return [
+			latLngBounds.getSouthWest(),
+			latLngBounds.getNorthWest(),
+			latLngBounds.getNorthEast(),
+			latLngBounds.getSouthEast()
+		];
 	}
 });
 
